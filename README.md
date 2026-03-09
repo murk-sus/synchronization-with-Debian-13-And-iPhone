@@ -52,6 +52,34 @@ cd /var/mobile/debian-sync-project
 - `/etc/debiansync.conf` — конфиг Debian-хоста и путей;
 - `/Library/LaunchDaemons/com.debiansync.fullsync.plist` — автозапуск полной синхронизации.
 
+## Как собрать `.deb` в PyCharm
+
+Да, можно собрать через терминал в PyCharm на Debian/Ubuntu.
+
+1. Открой проект в PyCharm.
+2. Открой **Terminal** внизу IDE.
+3. Установи `dpkg-deb` (если ещё не установлен):
+
+```bash
+sudo apt update
+sudo apt install -y dpkg-dev
+```
+
+4. Запусти сборку с флагом для не-iOS среды:
+
+```bash
+chmod +x build-on-iphone.sh
+./build-on-iphone.sh --allow-non-ios
+```
+
+5. Готовый файл будет в:
+
+```bash
+dist/com.debiansync.fullsync_0.1.0_iphoneos-arm.deb
+```
+
+> Этот `.deb` потом просто переносишь на iPhone и ставишь через `dpkg -i`.
+
 ## Как собрать `.deb` (только на iPhone)
 
 В папке проекта на iPhone:
