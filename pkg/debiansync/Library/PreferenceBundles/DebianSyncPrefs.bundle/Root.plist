@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>title</key>
+  <string>Debian Full Sync</string>
+  <key>items</key>
+  <array>
+    <dict>
+      <key>cell</key>
+      <string>PSGroupCell</string>
+      <key>label</key>
+      <string>Основные настройки синхронизации</string>
+    </dict>
+
+    <dict>
+      <key>cell</key>
+      <string>PSSwitchCell</string>
+      <key>defaults</key>
+      <string>com.debiansync.fullsync</string>
+      <key>default</key>
+      <true/>
+      <key>key</key>
+      <string>AutoSyncEnabled</string>
+      <key>label</key>
+      <string>Автосинхронизация</string>
+    </dict>
+
+    <dict>
+      <key>cell</key>
+      <string>PSEditTextCell</string>
+      <key>defaults</key>
+      <string>com.debiansync.fullsync</string>
+      <key>default</key>
+      <string>60</string>
+      <key>key</key>
+      <string>SyncInterval</string>
+      <key>label</key>
+      <string>Интервал (сек)</string>
+      <key>keyboard</key>
+      <string>NumbersAndPunctuation</string>
+      <key>isNumeric</key>
+      <true/>
+    </dict>
+
+    <dict>
+      <key>cell</key>
+      <string>PSEditTextCell</string>
+      <key>defaults</key>
+      <string>com.debiansync.fullsync</string>
+      <key>key</key>
+      <string>RemoteHost</string>
+      <key>label</key>
+      <string>Debian Host (IP/домен)</string>
+      <key>placeholder</key>
+      <string>192.168.1.10</string>
+    </dict>
+
+    <dict>
+      <key>cell</key>
+      <string>PSEditTextCell</string>
+      <key>defaults</key>
+      <string>com.debiansync.fullsync</string>
+      <key>key</key>
+      <string>RemoteUser</string>
+      <key>label</key>
+      <string>Debian User</string>
+      <key>placeholder</key>
+      <string>your_debian_user</string>
+    </dict>
+
+    <dict>
+      <key>cell</key>
+      <string>PSEditTextCell</string>
+      <key>defaults</key>
+      <string>com.debiansync.fullsync</string>
+      <key>default</key>
+      <string>22</string>
+      <key>key</key>
+      <string>RemotePort</string>
+      <key>label</key>
+      <string>SSH Port</string>
+      <key>keyboard</key>
+      <string>NumbersAndPunctuation</string>
+      <key>isNumeric</key>
+      <true/>
+    </dict>
+
+    <dict>
+      <key>cell</key>
+      <string>PSEditTextCell</string>
+      <key>defaults</key>
+      <string>com.debiansync.fullsync</string>
+      <key>key</key>
+      <string>RemoteShareDir</string>
+      <key>label</key>
+      <string>Папка на Debian</string>
+      <key>placeholder</key>
+      <string>/home/user/iPhoneSync/shared</string>
+    </dict>
+
+    <dict>
+      <key>cell</key>
+      <string>PSEditTextCell</string>
+      <key>defaults</key>
+      <string>com.debiansync.fullsync</string>
+      <key>key</key>
+      <string>LocalShareDir</string>
+      <key>label</key>
+      <string>Папка на iPhone</string>
+      <key>placeholder</key>
+      <string>/var/mobile/Media/DebianSync/shared</string>
+    </dict>
+
+    <dict>
+      <key>cell</key>
+      <string>PSStaticTextCell</string>
+      <key>label</key>
+      <string>Настройки применяются автоматически при следующем запуске синхронизации.</string>
+    </dict>
+
+    <dict>
+      <key>cell</key>
+      <string>PSGroupCell</string>
+      <key>label</key>
+      <string>Ссылки автора</string>
+    </dict>
+
+    <dict>
+      <key>cell</key>
+      <string>PSLinkCell</string>
+      <key>label</key>
+      <string>GitHub: murk-sus</string>
+      <key>url</key>
+      <string>https://github.com/murk-sus</string>
+    </dict>
+
+    <dict>
+      <key>cell</key>
+      <string>PSLinkCell</string>
+      <key>label</key>
+      <string>Telegram канал</string>
+      <key>url</key>
+      <string>https://t.me/femboynayaa</string>
+    </dict>
+
+    <dict>
+      <key>cell</key>
+      <string>PSStaticTextCell</string>
+      <key>label</key>
+      <string>Telegram: @natsuki_my_wife_mur</string>
+    </dict>
+
+    <dict>
+      <key>cell</key>
+      <string>PSStaticTextCell</string>
+      <key>label</key>
+      <string>Email: afk9659@gmail.com</string>
+    </dict>
+  </array>
+</dict>
+</plist>
