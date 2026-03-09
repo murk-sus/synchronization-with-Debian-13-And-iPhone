@@ -105,3 +105,42 @@ debian-sync clip sync
 debian-sync files sync
 debian-sync full
 ```
+
+
+## Ошибка в Sileo: `Depends ... iphoneos-arm`
+
+Если видишь красные ошибки вида:
+
+- `Depends rsync:iphoneos-arm`
+- `Depends preferenceloader:iphoneos-arm`
+- `Depends openssh:iphoneos-arm`
+
+это означает, что менеджер пакетов не нашёл нужные пакеты в подключённых репо.
+
+Я убрал жёсткие `Depends` из этого твика, чтобы установка не блокировалась.
+
+Что сделать на iPhone:
+
+1. Обновить источники в Sileo/Zebra (**Refresh**).
+2. Установить вручную (если доступны):
+   - OpenSSH
+   - rsync
+   - PreferenceLoader
+3. Если `PreferenceLoader` не находится — добавь репо, где он есть (обычно BigBoss/Procursus в зависимости от jailbreak).
+4. Переустанови наш пакет.
+
+Через терминал (если есть apt):
+
+```bash
+apt update
+apt install -y openssh rsync preferenceloader || true
+```
+
+Проверка после установки:
+
+```bash
+which ssh
+which rsync
+ls /Library/PreferenceLoader/Preferences/com.debiansync.fullsyncprefs.plist
+```
+

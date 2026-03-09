@@ -6,4 +6,3 @@ Description: iPhone <-> Debian 13 clipboard and file synchronization helper
 Maintainer: Codex <codex@example.com>
 Author: Codex
 Section: Utilities
-Depends: openssh, rsync, preferenceloader

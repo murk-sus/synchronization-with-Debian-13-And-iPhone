@@ -13,4 +13,16 @@ if command -v launchctl >/dev/null 2>&1; then
   launchctl load /Library/LaunchDaemons/com.debiansync.fullsync.plist >/dev/null 2>&1 || true
 fi
 
-echo "Debian Full Sync installed. Edit /etc/debiansync.conf and set your Debian host."
+echo "Debian Full Sync installed."
+
+if ! command -v ssh >/dev/null 2>&1; then
+  echo "[debian-sync] WARN: ssh not found. Install OpenSSH package in Sileo/Zebra."
+fi
+if ! command -v rsync >/dev/null 2>&1; then
+  echo "[debian-sync] WARN: rsync not found. Install rsync package in Sileo/Zebra."
+fi
+if [[ ! -f /Library/PreferenceLoader/Preferences/com.debiansync.fullsyncprefs.plist ]]; then
+  echo "[debian-sync] WARN: PreferenceLoader entry missing; Settings pane may not appear."
+fi
+
+echo "Edit /etc/debiansync.conf (or Settings > Debian Full Sync) and set Debian host."
