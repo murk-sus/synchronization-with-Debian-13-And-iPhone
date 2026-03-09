@@ -54,31 +54,45 @@ cd /var/mobile/debian-sync-project
 
 ## Как собрать `.deb` в PyCharm
 
-Да, можно собрать через терминал в PyCharm на Debian/Ubuntu.
+### Важно про твою ошибку в Windows (`sudo отключен`)
 
-1. Открой проект в PyCharm.
-2. Открой **Terminal** внизу IDE.
-3. Установи `dpkg-deb` (если ещё не установлен):
+Ты запускаешь команды в **PowerShell на Windows**, а `sudo`/`apt` — это Linux-инструменты.
+Поэтому ошибка нормальная: в обычном PowerShell эти команды не работают.
+
+### Вариант A (рекомендуется): через WSL в PyCharm
+
+1. Установи WSL (Ubuntu) в Windows (один раз, в PowerShell от администратора):
+
+```powershell
+wsl --install -d Ubuntu
+```
+
+2. Перезагрузи ПК и задай логин/пароль Linux-пользователя.
+3. В PyCharm открой проект через WSL интерпретатор/терминал **или** зайди в Ubuntu терминал и перейди в проект.
+4. В Ubuntu выполни:
 
 ```bash
 sudo apt update
 sudo apt install -y dpkg-dev
-```
-
-4. Запусти сборку с флагом для не-iOS среды:
-
-```bash
 chmod +x build-on-iphone.sh
 ./build-on-iphone.sh --allow-non-ios
 ```
 
-5. Готовый файл будет в:
+### Вариант B: собрать прямо на iPhone
+
+Если не хочешь настраивать WSL — просто перенеси проект на iPhone и запусти:
+
+```bash
+./build-on-iphone.sh
+```
+
+### Где будет готовый файл
 
 ```bash
 dist/com.debiansync.fullsync_0.1.0_iphoneos-arm.deb
 ```
 
-> Этот `.deb` потом просто переносишь на iPhone и ставишь через `dpkg -i`.
+> Этот `.deb` переносишь на iPhone и ставишь через `dpkg -i`.
 
 ## Как собрать `.deb` (только на iPhone)
 
