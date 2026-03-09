@@ -1,0 +1,9 @@
+Package: com.debiansync.fullsync
+Name: Debian Full Sync
+Version: 0.1.0
+Architecture: iphoneos-arm
+Description: iPhone <-> Debian 13 clipboard and file synchronization helper
+Maintainer: Codex <codex@example.com>
+Author: Codex
+Section: Utilities
+Depends: openssh, rsync

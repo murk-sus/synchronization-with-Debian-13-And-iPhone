@@ -1,0 +1,15 @@
+#!/bin/bash
+set -e
+
+mkdir -p /var/mobile/Library/Caches/debiansync
+mkdir -p /var/mobile/Media/DebianSync/shared
+chown -R mobile:mobile /var/mobile/Library/Caches/debiansync /var/mobile/Media/DebianSync || true
+chmod 0644 /etc/debiansync.conf || true
+chmod 0644 /Library/LaunchDaemons/com.debiansync.fullsync.plist || true
+
+if command -v launchctl >/dev/null 2>&1; then
+  launchctl unload /Library/LaunchDaemons/com.debiansync.fullsync.plist >/dev/null 2>&1 || true
+  launchctl load /Library/LaunchDaemons/com.debiansync.fullsync.plist >/dev/null 2>&1 || true
+fi
+
+echo "Debian Full Sync installed. Edit /etc/debiansync.conf and set your Debian host."

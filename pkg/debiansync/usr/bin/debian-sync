@@ -1,0 +1,190 @@
+#!/bin/bash
+set -euo pipefail
+
+CONF_FILE="/etc/debiansync.conf"
+STATE_DIR="/var/mobile/Library/Caches/debiansync"
+LAST_CLIP_FILE="$STATE_DIR/last_clipboard_hash"
+DEFAULT_SHARE_DIR="/var/mobile/Media/DebianSync/shared"
+
+mkdir -p "$STATE_DIR" "$DEFAULT_SHARE_DIR"
+
+if [[ -f "$CONF_FILE" ]]; then
+  # shellcheck disable=SC1090
+  source "$CONF_FILE"
+fi
+
+REMOTE_HOST="${REMOTE_HOST:-}"
+REMOTE_USER="${REMOTE_USER:-${USER:-mobile}}"
+REMOTE_PORT="${REMOTE_PORT:-22}"
+REMOTE_SHARE_DIR="${REMOTE_SHARE_DIR:-$HOME/iPhoneSync/shared}"
+REMOTE_CLIP_CMD_GET="${REMOTE_CLIP_CMD_GET:-xclip -selection clipboard -o 2>/dev/null || wl-paste 2>/dev/null || true}"
+REMOTE_CLIP_CMD_SET="${REMOTE_CLIP_CMD_SET:-xclip -selection clipboard -i 2>/dev/null || wl-copy 2>/dev/null || true}"
+LOCAL_SHARE_DIR="${LOCAL_SHARE_DIR:-$DEFAULT_SHARE_DIR}"
+SSH_OPTS=(-p "$REMOTE_PORT" -o BatchMode=yes -o ConnectTimeout=6)
+
+log() {
+  [[ "${QUIET:-0}" == "1" ]] && return 0
+  echo "[debian-sync] $*"
+}
+
+fail() {
+  echo "[debian-sync] ERROR: $*" >&2
+  exit 1
+}
+
+require_remote() {
+  [[ -n "$REMOTE_HOST" ]] || fail "REMOTE_HOST is not configured in /etc/debiansync.conf"
+}
+
+local_clip_get() {
+  if command -v pbpaste >/dev/null 2>&1; then
+    pbpaste
+  elif command -v pasteboard >/dev/null 2>&1; then
+    pasteboard
+  elif [[ -f "$STATE_DIR/local_clipboard.txt" ]]; then
+    cat "$STATE_DIR/local_clipboard.txt"
+  else
+    true
+  fi
+}
+
+local_clip_set() {
+  local payload="$1"
+  if command -v pbcopy >/dev/null 2>&1; then
+    printf '%s' "$payload" | pbcopy
+  elif command -v pasteboard >/dev/null 2>&1; then
+    printf '%s' "$payload" > "$STATE_DIR/local_clipboard.txt"
+  else
+    printf '%s' "$payload" > "$STATE_DIR/local_clipboard.txt"
+  fi
+}
+
+remote_cmd() {
+  require_remote
+  ssh "${SSH_OPTS[@]}" "$REMOTE_USER@$REMOTE_HOST" "$@"
+}
+
+remote_clip_get() {
+  remote_cmd "$REMOTE_CLIP_CMD_GET"
+}
+
+remote_clip_set() {
+  local payload="$1"
+  require_remote
+  printf '%s' "$payload" | ssh "${SSH_OPTS[@]}" "$REMOTE_USER@$REMOTE_HOST" "$REMOTE_CLIP_CMD_SET"
+}
+
+hash_text() {
+  printf '%s' "$1" | sha256sum | awk '{print $1}'
+}
+
+clip_push() {
+  local clip
+  clip="$(local_clip_get)"
+  remote_clip_set "$clip"
+  log "Clipboard pushed to Debian host"
+}
+
+clip_pull() {
+  local remote
+  remote="$(remote_clip_get || true)"
+  local_clip_set "$remote"
+  log "Clipboard pulled from Debian host"
+}
+
+clip_sync() {
+  local local_clip remote_clip local_hash remote_hash last_hash
+  local_clip="$(local_clip_get)"
+  remote_clip="$(remote_clip_get || true)"
+  local_hash="$(hash_text "$local_clip")"
+  remote_hash="$(hash_text "$remote_clip")"
+  last_hash="$(cat "$LAST_CLIP_FILE" 2>/dev/null || true)"
+
+  if [[ "$local_hash" != "$last_hash" && "$local_hash" != "$remote_hash" ]]; then
+    remote_clip_set "$local_clip"
+    printf '%s' "$local_hash" > "$LAST_CLIP_FILE"
+    log "Clipboard sync: iPhone -> Debian"
+    return
+  fi
+
+  if [[ "$remote_hash" != "$last_hash" && "$remote_hash" != "$local_hash" ]]; then
+    local_clip_set "$remote_clip"
+    printf '%s' "$remote_hash" > "$LAST_CLIP_FILE"
+    log "Clipboard sync: Debian -> iPhone"
+    return
+  fi
+
+  printf '%s' "$local_hash" > "$LAST_CLIP_FILE"
+  log "Clipboard sync: no changes"
+}
+
+files_push() {
+  require_remote
+  rsync -az --delete -e "ssh -p $REMOTE_PORT" "$LOCAL_SHARE_DIR/" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_SHARE_DIR/"
+  log "Files pushed to Debian: $LOCAL_SHARE_DIR -> $REMOTE_SHARE_DIR"
+}
+
+files_pull() {
+  require_remote
+  mkdir -p "$LOCAL_SHARE_DIR"
+  rsync -az --delete -e "ssh -p $REMOTE_PORT" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_SHARE_DIR/" "$LOCAL_SHARE_DIR/"
+  log "Files pulled from Debian: $REMOTE_SHARE_DIR -> $LOCAL_SHARE_DIR"
+}
+
+files_sync() {
+  require_remote
+  mkdir -p "$LOCAL_SHARE_DIR"
+  remote_cmd "mkdir -p '$REMOTE_SHARE_DIR'"
+  rsync -az --update -e "ssh -p $REMOTE_PORT" "$LOCAL_SHARE_DIR/" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_SHARE_DIR/"
+  rsync -az --update -e "ssh -p $REMOTE_PORT" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_SHARE_DIR/" "$LOCAL_SHARE_DIR/"
+  log "Two-way file sync complete"
+}
+
+full_sync() {
+  clip_sync
+  files_sync
+}
+
+usage() {
+  cat <<USAGE
+Usage:
+  debian-sync clip push|pull|sync
+  debian-sync files push|pull|sync
+  debian-sync full [--quiet]
+
+Config file: /etc/debiansync.conf
+USAGE
+}
+
+main() {
+  local cmd="${1:-}" sub="${2:-}"
+  [[ "${3:-}" == "--quiet" || "${2:-}" == "--quiet" ]] && QUIET=1
+
+  case "$cmd" in
+    clip)
+      case "$sub" in
+        push) clip_push ;;
+        pull) clip_pull ;;
+        sync) clip_sync ;;
+        *) usage; exit 1 ;;
+      esac
+      ;;
+    files)
+      case "$sub" in
+        push) files_push ;;
+        pull) files_pull ;;
+        sync) files_sync ;;
+        *) usage; exit 1 ;;
+      esac
+      ;;
+    full)
+      full_sync
+      ;;
+    *)
+      usage
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"
