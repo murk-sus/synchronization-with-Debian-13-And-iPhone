@@ -1,0 +1,5 @@
+#!/bin/bash
+set -e
+if command -v launchctl >/dev/null 2>&1; then
+  launchctl unload /Library/LaunchDaemons/com.debiansync.fullsync.plist >/dev/null 2>&1 || true
+fi
