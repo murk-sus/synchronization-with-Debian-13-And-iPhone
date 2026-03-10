@@ -261,3 +261,22 @@ su
 - конфиг: `/var/jb/etc/debiansync.conf`
 
 Если ты на Dopamine/Palera1n rootless — ставь именно этот пакет.
+
+
+## Ошибка `Не удалось загрузить пакет DebianSyncPrefs, не найден исполняемый файл`
+
+Это ошибка загрузки PreferenceBundle в Настройках (NSCocoaErrorDomain Code=4).
+
+Причина: у бандла не было исполняемого файла `DebianSyncPrefs`.
+
+В этой версии исправлено: в `DebianSyncPrefs.bundle` добавлен `CFBundleExecutable` и файл `DebianSyncPrefs`.
+
+Что делать:
+
+```bash
+./build-on-iphone.sh
+su -c ./install-on-iphone.sh
+```
+
+После установки открой Настройки снова.
+
