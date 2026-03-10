@@ -1,16 +1,45 @@
 #!/bin/bash
 set -e
 
+# Support both rootful and rootless layouts.
+ROOTFUL_LIB="/Library"
+ROOTLESS_LIB="/var/jb/Library"
+
+PREF_ENTRY_REL="PreferenceLoader/Preferences/com.debiansync.fullsyncprefs.plist"
+PREF_BUNDLE_REL="PreferenceBundles/DebianSyncPrefs.bundle"
+DAEMON_REL="LaunchDaemons/com.debiansync.fullsync.plist"
+
 mkdir -p /var/mobile/Library/Caches/debiansync
 mkdir -p /var/mobile/Media/DebianSync/shared
 chown -R mobile:mobile /var/mobile/Library/Caches/debiansync /var/mobile/Media/DebianSync || true
 chmod 0644 /etc/debiansync.conf || true
-chmod 0644 /Library/LaunchDaemons/com.debiansync.fullsync.plist || true
-chmod 0644 /Library/PreferenceLoader/Preferences/com.debiansync.fullsyncprefs.plist || true
 
+# Ensure files are readable in rootful path.
+chmod 0644 "$ROOTFUL_LIB/$DAEMON_REL" >/dev/null 2>&1 || true
+chmod 0644 "$ROOTFUL_LIB/$PREF_ENTRY_REL" >/dev/null 2>&1 || true
+chmod -R 0755 "$ROOTFUL_LIB/$PREF_BUNDLE_REL" >/dev/null 2>&1 || true
+
+# Mirror preference files into rootless path if bootstrap exists.
+if [[ -d "$ROOTLESS_LIB" ]]; then
+  mkdir -p "$ROOTLESS_LIB/PreferenceLoader/Preferences"
+  mkdir -p "$ROOTLESS_LIB/PreferenceBundles"
+
+  if [[ -f "$ROOTFUL_LIB/$PREF_ENTRY_REL" ]]; then
+    cp -f "$ROOTFUL_LIB/$PREF_ENTRY_REL" "$ROOTLESS_LIB/$PREF_ENTRY_REL"
+    chmod 0644 "$ROOTLESS_LIB/$PREF_ENTRY_REL" || true
+  fi
+
+  if [[ -d "$ROOTFUL_LIB/$PREF_BUNDLE_REL" ]]; then
+    rm -rf "$ROOTLESS_LIB/$PREF_BUNDLE_REL"
+    cp -a "$ROOTFUL_LIB/$PREF_BUNDLE_REL" "$ROOTLESS_LIB/$PREF_BUNDLE_REL"
+    chmod -R 0755 "$ROOTLESS_LIB/$PREF_BUNDLE_REL" || true
+  fi
+fi
+
+# (Re)load daemon if available.
 if command -v launchctl >/dev/null 2>&1; then
-  launchctl unload /Library/LaunchDaemons/com.debiansync.fullsync.plist >/dev/null 2>&1 || true
-  launchctl load /Library/LaunchDaemons/com.debiansync.fullsync.plist >/dev/null 2>&1 || true
+  launchctl unload "$ROOTFUL_LIB/$DAEMON_REL" >/dev/null 2>&1 || true
+  launchctl load "$ROOTFUL_LIB/$DAEMON_REL" >/dev/null 2>&1 || true
 fi
 
 echo "Debian Full Sync installed."
@@ -21,8 +50,11 @@ fi
 if ! command -v rsync >/dev/null 2>&1; then
   echo "[debian-sync] WARN: rsync not found. Install rsync package in Sileo/Zebra."
 fi
-if [[ ! -f /Library/PreferenceLoader/Preferences/com.debiansync.fullsyncprefs.plist ]]; then
+if [[ ! -f "$ROOTFUL_LIB/$PREF_ENTRY_REL" && ! -f "$ROOTLESS_LIB/$PREF_ENTRY_REL" ]]; then
   echo "[debian-sync] WARN: PreferenceLoader entry missing; Settings pane may not appear."
 fi
+
+# Restart Settings app so PreferenceLoader picks up new entry.
+killall -9 Preferences >/dev/null 2>&1 || true
 
 echo "Edit /etc/debiansync.conf (or Settings > Debian Full Sync) and set Debian host."

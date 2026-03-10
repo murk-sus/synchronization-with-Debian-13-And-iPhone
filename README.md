@@ -157,3 +157,23 @@ dpkg -i dist/com.debiansync.fullsync_0.1.0_iphoneos-arm64.deb
 ```
 
 Если рядом лежит старый `...iphoneos-arm.deb`, удали его, чтобы не перепутать.
+
+
+## Если твик не появляется в "Настройки"
+
+На части jailbreak (особенно rootless) PreferenceLoader читает файлы из `/var/jb/Library/...`,
+а не только из `/Library/...`.
+
+В новой версии postinst автоматически копирует файлы твика в оба пути и перезапускает приложение Настройки.
+
+Если всё равно не видно, выполни на iPhone:
+
+```bash
+ls -l /Library/PreferenceLoader/Preferences/com.debiansync.fullsyncprefs.plist
+ls -l /var/jb/Library/PreferenceLoader/Preferences/com.debiansync.fullsyncprefs.plist
+killall -9 Preferences
+sbreload || killall -9 SpringBoard
+```
+
+И проверь, установлен ли `PreferenceLoader` в твоём bootstrap.
+
