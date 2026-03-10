@@ -1,0 +1,75 @@
+#!/bin/bash
+set -e
+
+# Support both rootful and rootless layouts.
+ROOTFUL_LIB="/Library"
+ROOTLESS_LIB="/var/jb/Library"
+
+PREF_ENTRY_REL="PreferenceLoader/Preferences/com.debiansync.fullsyncprefs.plist"
+PREF_BUNDLE_REL="PreferenceBundles/DebianSyncPrefs.bundle"
+DAEMON_REL="LaunchDaemons/com.debiansync.fullsync.plist"
+
+mkdir -p /var/mobile/Library/Caches/debiansync
+mkdir -p /var/mobile/Media/DebianSync/shared
+chown -R mobile:mobile /var/mobile/Library/Caches/debiansync /var/mobile/Media/DebianSync || true
+chmod 0644 /etc/debiansync.conf || true
+
+# Ensure files are readable in rootful path.
+chmod 0644 "$ROOTFUL_LIB/$DAEMON_REL" >/dev/null 2>&1 || true
+chmod 0644 "$ROOTFUL_LIB/$PREF_ENTRY_REL" >/dev/null 2>&1 || true
+chmod -R 0755 "$ROOTFUL_LIB/$PREF_BUNDLE_REL" >/dev/null 2>&1 || true
+
+# Mirror preference files across rootful/rootless paths when possible.
+if [[ -d "$ROOTLESS_LIB" ]]; then
+  mkdir -p "$ROOTLESS_LIB/PreferenceLoader/Preferences"
+  mkdir -p "$ROOTLESS_LIB/PreferenceBundles"
+
+  SRC_PREF_ENTRY=""
+  SRC_PREF_BUNDLE=""
+  [[ -f "$ROOTFUL_LIB/$PREF_ENTRY_REL" ]] && SRC_PREF_ENTRY="$ROOTFUL_LIB/$PREF_ENTRY_REL"
+  [[ -f "$ROOTLESS_LIB/$PREF_ENTRY_REL" && -z "$SRC_PREF_ENTRY" ]] && SRC_PREF_ENTRY="$ROOTLESS_LIB/$PREF_ENTRY_REL"
+
+  [[ -d "$ROOTFUL_LIB/$PREF_BUNDLE_REL" ]] && SRC_PREF_BUNDLE="$ROOTFUL_LIB/$PREF_BUNDLE_REL"
+  [[ -d "$ROOTLESS_LIB/$PREF_BUNDLE_REL" && -z "$SRC_PREF_BUNDLE" ]] && SRC_PREF_BUNDLE="$ROOTLESS_LIB/$PREF_BUNDLE_REL"
+
+  if [[ -n "$SRC_PREF_ENTRY" ]]; then
+    cp -f "$SRC_PREF_ENTRY" "$ROOTFUL_LIB/$PREF_ENTRY_REL" 2>/dev/null || true
+    cp -f "$SRC_PREF_ENTRY" "$ROOTLESS_LIB/$PREF_ENTRY_REL" 2>/dev/null || true
+    chmod 0644 "$ROOTFUL_LIB/$PREF_ENTRY_REL" 2>/dev/null || true
+    chmod 0644 "$ROOTLESS_LIB/$PREF_ENTRY_REL" 2>/dev/null || true
+  fi
+
+  if [[ -n "$SRC_PREF_BUNDLE" ]]; then
+    rm -rf "$ROOTFUL_LIB/$PREF_BUNDLE_REL" 2>/dev/null || true
+    rm -rf "$ROOTLESS_LIB/$PREF_BUNDLE_REL" 2>/dev/null || true
+    cp -a "$SRC_PREF_BUNDLE" "$ROOTFUL_LIB/$PREF_BUNDLE_REL" 2>/dev/null || true
+    cp -a "$SRC_PREF_BUNDLE" "$ROOTLESS_LIB/$PREF_BUNDLE_REL" 2>/dev/null || true
+    chmod -R 0755 "$ROOTFUL_LIB/$PREF_BUNDLE_REL" 2>/dev/null || true
+    chmod -R 0755 "$ROOTLESS_LIB/$PREF_BUNDLE_REL" 2>/dev/null || true
+  fi
+fi
+
+# (Re)load daemon if available.
+if command -v launchctl >/dev/null 2>&1; then
+  launchctl unload "$ROOTFUL_LIB/$DAEMON_REL" >/dev/null 2>&1 || true
+  launchctl load "$ROOTFUL_LIB/$DAEMON_REL" >/dev/null 2>&1 || true
+fi
+
+echo "Debian Full Sync installed."
+
+if ! command -v ssh >/dev/null 2>&1; then
+  echo "[debian-sync] WARN: ssh not found. Install OpenSSH package in Sileo/Zebra."
+fi
+if ! command -v rsync >/dev/null 2>&1; then
+  echo "[debian-sync] WARN: rsync not found. Install rsync package in Sileo/Zebra."
+fi
+if [[ ! -f "$ROOTFUL_LIB/$PREF_ENTRY_REL" && ! -f "$ROOTLESS_LIB/$PREF_ENTRY_REL" ]]; then
+  echo "[debian-sync] WARN: PreferenceLoader entry missing; Settings pane may not appear."
+fi
+
+# Restart Settings app so PreferenceLoader picks up new entry.
+killall -9 cfprefsd >/dev/null 2>&1 || true
+killall -9 Preferences >/dev/null 2>&1 || true
+command -v uicache >/dev/null 2>&1 && uicache -a >/dev/null 2>&1 || true
+
+echo "Edit /etc/debiansync.conf (or Settings > Debian Full Sync) and set Debian host."
