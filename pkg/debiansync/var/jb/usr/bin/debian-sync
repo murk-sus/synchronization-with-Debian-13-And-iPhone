@@ -1,0 +1,316 @@
+#!/bin/bash
+set -euo pipefail
+
+CONF_FILE="/var/jb/etc/debiansync.conf"
+STATE_DIR="/var/mobile/Library/Caches/debiansync"
+LAST_CLIP_FILE="$STATE_DIR/last_clipboard_hash"
+LAST_RUN_FILE="$STATE_DIR/last_full_sync_ts"
+DEFAULT_SHARE_DIR="/var/mobile/Media/DebianSync/shared"
+DAEMON_PLIST="/var/jb/Library/LaunchDaemons/com.debiansync.fullsync.plist"
+
+mkdir -p "$STATE_DIR" "$DEFAULT_SHARE_DIR"
+
+if [[ -f "$CONF_FILE" ]]; then
+  # shellcheck disable=SC1090
+  source "$CONF_FILE"
+fi
+
+REMOTE_HOST="${REMOTE_HOST:-}"
+REMOTE_USER="${REMOTE_USER:-${USER:-mobile}}"
+REMOTE_PORT="${REMOTE_PORT:-22}"
+REMOTE_SHARE_DIR="${REMOTE_SHARE_DIR:-$HOME/iPhoneSync/shared}"
+REMOTE_CLIP_CMD_GET="${REMOTE_CLIP_CMD_GET:-xclip -selection clipboard -o 2>/dev/null || wl-paste 2>/dev/null || true}"
+REMOTE_CLIP_CMD_SET="${REMOTE_CLIP_CMD_SET:-xclip -selection clipboard -i 2>/dev/null || wl-copy 2>/dev/null || true}"
+LOCAL_SHARE_DIR="${LOCAL_SHARE_DIR:-$DEFAULT_SHARE_DIR}"
+AUTO_SYNC_ENABLED="${AUTO_SYNC_ENABLED:-1}"
+SYNC_INTERVAL="${SYNC_INTERVAL:-60}"
+
+SSH_OPTS=(-p "$REMOTE_PORT" -o BatchMode=yes -o ConnectTimeout=6)
+
+log() {
+  [[ "${QUIET:-0}" == "1" ]] && return 0
+  echo "[debian-sync] $*"
+}
+
+fail() {
+  echo "[debian-sync] ERROR: $*" >&2
+  exit 1
+}
+
+require_remote() {
+  [[ -n "$REMOTE_HOST" ]] || fail "REMOTE_HOST is not configured in /var/jb/etc/debiansync.conf"
+}
+
+require_root() {
+  [[ "$(id -u)" -eq 0 ]] || fail "run as root (use su -c '...')"
+}
+
+write_conf_key() {
+  local key="$1" value="$2"
+  mkdir -p "$(dirname "$CONF_FILE")"
+  touch "$CONF_FILE"
+
+  if grep -qE "^${key}=" "$CONF_FILE"; then
+    sed -i "s|^${key}=.*|${key}=\"${value}\"|" "$CONF_FILE"
+  else
+    printf '%s="%s"\n' "$key" "$value" >> "$CONF_FILE"
+  fi
+}
+
+service_reload() {
+  require_root
+  if command -v launchctl >/dev/null 2>&1 && [[ -f "$DAEMON_PLIST" ]]; then
+    launchctl unload "$DAEMON_PLIST" >/dev/null 2>&1 || true
+    launchctl load "$DAEMON_PLIST" >/dev/null 2>&1 || true
+  fi
+}
+
+service_enable() {
+  require_root
+  write_conf_key "AUTO_SYNC_ENABLED" "1"
+  service_reload
+  log "Auto sync enabled"
+}
+
+service_disable() {
+  require_root
+  write_conf_key "AUTO_SYNC_ENABLED" "0"
+  service_reload
+  log "Auto sync disabled"
+}
+
+service_status() {
+  echo "Config: $CONF_FILE"
+  echo "Daemon: $DAEMON_PLIST"
+  echo "AUTO_SYNC_ENABLED=${AUTO_SYNC_ENABLED:-1}"
+  echo "SYNC_INTERVAL=${SYNC_INTERVAL:-60}"
+  echo "REMOTE_HOST=${REMOTE_HOST:-<empty>}"
+  if command -v launchctl >/dev/null 2>&1; then
+    launchctl print system/com.debiansync.fullsync >/dev/null 2>&1 && echo "daemon=loaded" || echo "daemon=not_loaded"
+  else
+    echo "daemon=unknown (launchctl not found)"
+  fi
+}
+
+config_show() {
+  echo "----- $CONF_FILE -----"
+  cat "$CONF_FILE" 2>/dev/null || echo "(missing)"
+}
+
+config_set() {
+  require_root
+  local key="${1:-}" value="${2:-}"
+  [[ -n "$key" && -n "$value" ]] || fail "Usage: debian-sync config set KEY VALUE"
+  write_conf_key "$key" "$value"
+  log "Config updated: $key"
+}
+
+config_interval() {
+  require_root
+  local seconds="${1:-}"
+  [[ "$seconds" =~ ^[0-9]+$ ]] || fail "interval must be integer"
+  (( seconds < 10 )) && seconds=10
+  write_conf_key "SYNC_INTERVAL" "$seconds"
+  service_reload
+  log "Sync interval set to ${seconds}s"
+}
+
+local_clip_get() {
+  if command -v pbpaste >/dev/null 2>&1; then
+    pbpaste
+  elif command -v pasteboard >/dev/null 2>&1; then
+    pasteboard
+  elif [[ -f "$STATE_DIR/local_clipboard.txt" ]]; then
+    cat "$STATE_DIR/local_clipboard.txt"
+  else
+    true
+  fi
+}
+
+local_clip_set() {
+  local payload="$1"
+  if command -v pbcopy >/dev/null 2>&1; then
+    printf '%s' "$payload" | pbcopy
+  elif command -v pasteboard >/dev/null 2>&1; then
+    printf '%s' "$payload" > "$STATE_DIR/local_clipboard.txt"
+  else
+    printf '%s' "$payload" > "$STATE_DIR/local_clipboard.txt"
+  fi
+}
+
+remote_cmd() {
+  require_remote
+  ssh "${SSH_OPTS[@]}" "$REMOTE_USER@$REMOTE_HOST" "$@"
+}
+
+remote_clip_get() {
+  remote_cmd "$REMOTE_CLIP_CMD_GET"
+}
+
+remote_clip_set() {
+  local payload="$1"
+  require_remote
+  printf '%s' "$payload" | ssh "${SSH_OPTS[@]}" "$REMOTE_USER@$REMOTE_HOST" "$REMOTE_CLIP_CMD_SET"
+}
+
+hash_text() {
+  printf '%s' "$1" | sha256sum | awk '{print $1}'
+}
+
+clip_push() {
+  local clip
+  clip="$(local_clip_get)"
+  remote_clip_set "$clip"
+  log "Clipboard pushed to Debian host"
+}
+
+clip_pull() {
+  local remote
+  remote="$(remote_clip_get || true)"
+  local_clip_set "$remote"
+  log "Clipboard pulled from Debian host"
+}
+
+clip_sync() {
+  local local_clip remote_clip local_hash remote_hash last_hash
+  local_clip="$(local_clip_get)"
+  remote_clip="$(remote_clip_get || true)"
+  local_hash="$(hash_text "$local_clip")"
+  remote_hash="$(hash_text "$remote_clip")"
+  last_hash="$(cat "$LAST_CLIP_FILE" 2>/dev/null || true)"
+
+  if [[ "$local_hash" != "$last_hash" && "$local_hash" != "$remote_hash" ]]; then
+    remote_clip_set "$local_clip"
+    printf '%s' "$local_hash" > "$LAST_CLIP_FILE"
+    log "Clipboard sync: iPhone -> Debian"
+    return
+  fi
+
+  if [[ "$remote_hash" != "$last_hash" && "$remote_hash" != "$local_hash" ]]; then
+    local_clip_set "$remote_clip"
+    printf '%s' "$remote_hash" > "$LAST_CLIP_FILE"
+    log "Clipboard sync: Debian -> iPhone"
+    return
+  fi
+
+  printf '%s' "$local_hash" > "$LAST_CLIP_FILE"
+  log "Clipboard sync: no changes"
+}
+
+files_push() {
+  require_remote
+  rsync -az --delete -e "ssh -p $REMOTE_PORT" "$LOCAL_SHARE_DIR/" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_SHARE_DIR/"
+  log "Files pushed to Debian: $LOCAL_SHARE_DIR -> $REMOTE_SHARE_DIR"
+}
+
+files_pull() {
+  require_remote
+  mkdir -p "$LOCAL_SHARE_DIR"
+  rsync -az --delete -e "ssh -p $REMOTE_PORT" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_SHARE_DIR/" "$LOCAL_SHARE_DIR/"
+  log "Files pulled from Debian: $REMOTE_SHARE_DIR -> $LOCAL_SHARE_DIR"
+}
+
+files_sync() {
+  require_remote
+  mkdir -p "$LOCAL_SHARE_DIR"
+  remote_cmd "mkdir -p '$REMOTE_SHARE_DIR'"
+  rsync -az --update -e "ssh -p $REMOTE_PORT" "$LOCAL_SHARE_DIR/" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_SHARE_DIR/"
+  rsync -az --update -e "ssh -p $REMOTE_PORT" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_SHARE_DIR/" "$LOCAL_SHARE_DIR/"
+  log "Two-way file sync complete"
+}
+
+full_sync() {
+  if [[ "${AUTO_SYNC_ENABLED:-1}" == "0" ]]; then
+    log "Auto sync disabled in config"
+    return 0
+  fi
+
+  local now last_run elapsed interval
+  now="$(date +%s)"
+  last_run="$(cat "$LAST_RUN_FILE" 2>/dev/null || echo 0)"
+  interval="${SYNC_INTERVAL:-60}"
+
+  if [[ ! "$interval" =~ ^[0-9]+$ ]]; then
+    interval=60
+  fi
+
+  if (( interval < 10 )); then
+    interval=10
+  fi
+
+  elapsed=$((now - last_run))
+  if (( elapsed < interval )); then
+    log "Waiting for next sync window (${elapsed}s/${interval}s)"
+    return 0
+  fi
+
+  clip_sync
+  files_sync
+  printf '%s' "$now" > "$LAST_RUN_FILE"
+}
+
+usage() {
+  cat <<USAGE
+Usage:
+  debian-sync clip push|pull|sync
+  debian-sync files push|pull|sync
+  debian-sync full [--quiet]
+
+  debian-sync service enable|disable|reload|status
+  debian-sync config show
+  debian-sync config set KEY VALUE
+  debian-sync config interval SECONDS
+
+Config file: /var/jb/etc/debiansync.conf
+USAGE
+}
+
+main() {
+  local cmd="${1:-}" sub="${2:-}"
+  [[ "${3:-}" == "--quiet" || "${2:-}" == "--quiet" ]] && QUIET=1
+
+  case "$cmd" in
+    clip)
+      case "$sub" in
+        push) clip_push ;;
+        pull) clip_pull ;;
+        sync) clip_sync ;;
+        *) usage; exit 1 ;;
+      esac
+      ;;
+    files)
+      case "$sub" in
+        push) files_push ;;
+        pull) files_pull ;;
+        sync) files_sync ;;
+        *) usage; exit 1 ;;
+      esac
+      ;;
+    full)
+      full_sync
+      ;;
+    service)
+      case "$sub" in
+        enable) service_enable ;;
+        disable) service_disable ;;
+        reload) service_reload ;;
+        status) service_status ;;
+        *) usage; exit 1 ;;
+      esac
+      ;;
+    config)
+      case "$sub" in
+        show) config_show ;;
+        set) config_set "${3:-}" "${4:-}" ;;
+        interval) config_interval "${3:-}" ;;
+        *) usage; exit 1 ;;
+      esac
+      ;;
+    *)
+      usage
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"

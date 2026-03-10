@@ -1,0 +1,53 @@
+#!/bin/bash
+set -e
+
+ROOTLESS_LIB="/var/jb/Library"
+PREF_ENTRY="$ROOTLESS_LIB/PreferenceLoader/Preferences/com.debiansync.fullsyncprefs.plist"
+PREF_BUNDLE="$ROOTLESS_LIB/PreferenceBundles/DebianSyncPrefs.bundle"
+DAEMON_PATH="$ROOTLESS_LIB/LaunchDaemons/com.debiansync.fullsync.plist"
+CONF_FILE="/var/jb/etc/debiansync.conf"
+
+mkdir -p /var/mobile/Library/Caches/debiansync
+mkdir -p /var/mobile/Media/DebianSync/shared
+chown -R mobile:mobile /var/mobile/Library/Caches/debiansync /var/mobile/Media/DebianSync || true
+chmod 0644 "$CONF_FILE" >/dev/null 2>&1 || true
+chmod 0644 "$PREF_ENTRY" >/dev/null 2>&1 || true
+chmod -R 0755 "$PREF_BUNDLE" >/dev/null 2>&1 || true
+chmod 0644 "$DAEMON_PATH" >/dev/null 2>&1 || true
+
+# Ensure bundle executable exists and points to available rootless libobjc.
+PREF_EXEC="$PREF_BUNDLE/DebianSyncPrefs"
+if [[ -e "$PREF_EXEC" && ! -L "$PREF_EXEC" ]]; then
+  rm -f "$PREF_EXEC" 2>/dev/null || true
+fi
+if [[ ! -e "$PREF_EXEC" ]]; then
+  if [[ -f /var/jb/usr/lib/libobjc.A.dylib ]]; then
+    ln -sf /var/jb/usr/lib/libobjc.A.dylib "$PREF_EXEC" 2>/dev/null || true
+  elif [[ -f /usr/lib/libobjc.A.dylib ]]; then
+    ln -sf /usr/lib/libobjc.A.dylib "$PREF_EXEC" 2>/dev/null || true
+  fi
+fi
+chmod 0755 "$PREF_EXEC" >/dev/null 2>&1 || true
+
+if command -v launchctl >/dev/null 2>&1 && [[ -f "$DAEMON_PATH" ]]; then
+  launchctl unload "$DAEMON_PATH" >/dev/null 2>&1 || true
+  launchctl load "$DAEMON_PATH" >/dev/null 2>&1 || true
+fi
+
+echo "Debian Full Sync (rootless) installed."
+
+if ! command -v ssh >/dev/null 2>&1; then
+  echo "[debian-sync] WARN: ssh not found. Install OpenSSH package in Sileo/Zebra."
+fi
+if ! command -v rsync >/dev/null 2>&1; then
+  echo "[debian-sync] WARN: rsync not found. Install rsync package in Sileo/Zebra."
+fi
+if [[ ! -f "$PREF_ENTRY" ]]; then
+  echo "[debian-sync] WARN: PreferenceLoader entry missing; Settings pane may not appear."
+fi
+
+killall -9 cfprefsd >/dev/null 2>&1 || true
+killall -9 Preferences >/dev/null 2>&1 || true
+command -v uicache >/dev/null 2>&1 && uicache -a >/dev/null 2>&1 || true
+
+echo "Edit /var/jb/etc/debiansync.conf (or Settings > Debian Full Sync) and set Debian host."
