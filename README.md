@@ -91,6 +91,37 @@ dist/com.debiansync.fullsync_0.1.0_iphoneos-arm64.deb
 dpkg -i dist/com.debiansync.fullsync_0.1.0_iphoneos-arm64.deb
 ```
 
+## Установка на iPhone (правильно, с root)
+
+На скрине у тебя ошибка из-за запуска от пользователя `mobile`:
+
+- `dpkg ... requires superuser privilege`
+- `killall ... Operation not permitted`
+
+Это нормально: для установки твика и перезапуска системных процессов нужны root-права.
+
+### Вариант 1 (рекомендуется): авто-скрипт
+
+```bash
+chmod +x install-on-iphone.sh
+./install-on-iphone.sh
+```
+
+Скрипт сам попробует `sudo` или `su`, установит deb и сделает reload кэшей.
+
+### Вариант 2: вручную через root shell
+
+```bash
+su
+# введи пароль root, если запрашивается
+
+dpkg -i dist/com.debiansync.fullsync_0.1.0_iphoneos-arm64.deb
+killall -9 cfprefsd
+killall -9 Preferences
+uicache -a || true
+sbreload || killall -9 SpringBoard
+```
+
 ## Debian зависимости
 
 ```bash
