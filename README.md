@@ -82,13 +82,13 @@ chmod +x build-on-iphone.sh
 Готовый файл:
 
 ```bash
-dist/com.debiansync.fullsync_0.1.0_iphoneos-arm.deb
+dist/com.debiansync.fullsync_0.1.0_iphoneos-arm64.deb
 ```
 
 ## Установка на iPhone
 
 ```bash
-dpkg -i dist/com.debiansync.fullsync_0.1.0_iphoneos-arm.deb
+dpkg -i dist/com.debiansync.fullsync_0.1.0_iphoneos-arm64.deb
 ```
 
 ## Debian зависимости
@@ -144,3 +144,16 @@ which rsync
 ls /Library/PreferenceLoader/Preferences/com.debiansync.fullsyncprefs.plist
 ```
 
+
+
+## Ошибка `package architecture (iphoneos-arm) does not match system (iphoneos-arm64)`
+
+Это значит, что ставится старый deb, собранный под `iphoneos-arm`.
+Нужно пересобрать пакет с архитектурой `iphoneos-arm64` и ставить именно новый файл.
+
+```bash
+./build-on-iphone.sh
+dpkg -i dist/com.debiansync.fullsync_0.1.0_iphoneos-arm64.deb
+```
+
+Если рядом лежит старый `...iphoneos-arm.deb`, удали его, чтобы не перепутать.

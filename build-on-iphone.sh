@@ -3,7 +3,7 @@ set -euo pipefail
 
 PKG_DIR="pkg/debiansync"
 OUT_DIR="dist"
-OUT_DEB="$OUT_DIR/com.debiansync.fullsync_0.1.0_iphoneos-arm.deb"
+OUT_DEB="$OUT_DIR/com.debiansync.fullsync_0.1.0_iphoneos-arm64.deb"
 ALLOW_NON_IOS=0
 
 usage() {
