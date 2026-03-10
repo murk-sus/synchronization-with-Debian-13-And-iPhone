@@ -15,20 +15,6 @@ chmod 0644 "$PREF_ENTRY" >/dev/null 2>&1 || true
 chmod -R 0755 "$PREF_BUNDLE" >/dev/null 2>&1 || true
 chmod 0644 "$DAEMON_PATH" >/dev/null 2>&1 || true
 
-# Ensure PreferenceBundle has a real executable file expected by Preferences loader.
-PREF_EXEC="$PREF_BUNDLE/DebianSyncPrefs"
-if [[ -L "$PREF_EXEC" ]]; then
-  rm -f "$PREF_EXEC" 2>/dev/null || true
-fi
-if [[ -d "$PREF_BUNDLE" && ! -f "$PREF_EXEC" ]]; then
-  if [[ -f /usr/lib/libobjc.A.dylib ]]; then
-    cp -f /usr/lib/libobjc.A.dylib "$PREF_EXEC" 2>/dev/null || true
-  elif [[ -f /var/jb/usr/lib/libobjc.A.dylib ]]; then
-    cp -f /var/jb/usr/lib/libobjc.A.dylib "$PREF_EXEC" 2>/dev/null || true
-  fi
-fi
-chmod 0755 "$PREF_EXEC" >/dev/null 2>&1 || true
-
 if command -v launchctl >/dev/null 2>&1 && [[ -f "$DAEMON_PATH" ]]; then
   launchctl unload "$DAEMON_PATH" >/dev/null 2>&1 || true
   launchctl load "$DAEMON_PATH" >/dev/null 2>&1 || true

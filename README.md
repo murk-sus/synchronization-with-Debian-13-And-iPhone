@@ -269,7 +269,7 @@ su
 
 Причина: у бандла не было исполняемого файла `DebianSyncPrefs`.
 
-В этой версии исправлено: в `DebianSyncPrefs.bundle` добавлен `CFBundleExecutable`, а `postinst` принудительно создаёт реальный файл `DebianSyncPrefs` (не симлинк), чтобы Preferences гарантированно загрузил bundle.
+В этой версии исправлено: из `Info.plist` убран требуемый `CFBundleExecutable`, поэтому Preferences грузит plist-only bundle без отдельного бинарника.
 
 Что делать:
 
